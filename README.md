@@ -30,7 +30,7 @@ I am not affiliated with Jina, nor Open-WebUI. This tool collects no information
 Now that we've gone over all the important crap, here's how to actually use this project. It doesn't matter how you import it.
 
 1. You can grab the raw source code and add it in OWI by going to Workspace>Tools>Create>Paste code.
-2. Visit (TODOURL)[need to create it on OWI] and directly import the tool by clicking "Get".
+2. Visit (https://openwebui.com/t/ayylmaonade/deepsearch)[The URL on openwebui.com] and directly import the tool by clicking "Get".
 3. Convert to .json and import the tool in OWI under Workspace>Tools>Import Tool. (You're insane if you do this.)
 
 ## Your rights & LICENSE
