@@ -1,13 +1,3 @@
-"""
-title: DeepSearch (Jina.ai)
-description: A DeepSearch tool that functions similarly to ChatGPT's Deep Research, using Jina.AI DeepSearch mode.
-author: Shaun (https://github.com/ayylmaonade)
-repository: https://github.com/ayylmaonade/execute-bash-open-webui
-date: 24/08/2025 (DD/MM/YY)
-version: 0.1
-license: GPLv3
-"""
-
 from pydantic import BaseModel, Field
 import aiohttp
 import asyncio
@@ -17,11 +7,14 @@ import json
 
 class Tools:
     """
-    Jina DeepSearch Tool for Open-WebUI.
-
+    Jina DeepSearch Tool for Open-WebUI - Now properly frames queries from the correct perspective.
     - Streams results from Jina DeepSearch (SSE / newline-delimited JSON).
     - Emits status + stream events via __event_emitter__ (if provided).
     - Returns aggregated text result on completion (or an error string).
+    - Added a system prompt to instruct model to act as research assistant (works well in testing at least)
+    - Sorted the wrong descriptions for some parameters (I misunderstood Jina, sue me.)
+    - Increased timeout default to 600 seconds as 60 by default would always time out.
+    - If you're reading this, at least somebody cares about comments. Shoutout you.
     """
 
     def __init__(self):
@@ -32,37 +25,33 @@ class Tools:
             "", description="Your Jina DeepSearch API key (Bearer token)"
         )
         timeout_seconds: int = Field(
-            60, description="Timeout for HTTP requests (seconds)"
+            600, description="Timeout for HTTP requests (seconds)"
         )
         reasoning_effort: str = Field(
             "low", description="Reasoning effort: low|medium|high"
         )
-        budget_tokens: int = Field(500000, description="Token budget for the request")
+        budget_tokens: int = Field(500000, description="Token budget for the request. Overrides reasoning effort.")
         max_returned_urls: int = Field(
-            50, description="Maximum number of returned URLs"
+            50,
+            description="Number of returned URLs that will be considered in the request and answer",
         )
         no_direct_answer: bool = Field(
             True, description="Ask model to avoid direct short answers"
         )
         team_size: int = Field(4, description="Team size for DeepSearch")
         stream_by_default: bool = Field(
-            True, description="Whether to stream results by default"
+            True, description="Whether to stream results by default (buggy in OWI)"
         )
 
     async def deepsearch(
         self, query: str, stream: Optional[bool] = None, __event_emitter__=None
     ) -> str:
         """
-        Perform a DeepSearch chat/completions request using Jina's DeepSearch API.
-
-        Args:
-            query: the user query to send as a single-user message (string)
-            stream: override the valves.stream_by_default value. If True, stream results.
-            __event_emitter__: optional async callable supplied by Open-WebUI for streaming events.
-                              call it like: await __event_emitter__(event_dict)
-        Returns:
-            A string result (aggregated) or an error string. If streaming, final aggregated text is
-            also returned after emission completes.
+        The sys prompt I was on about above: (line 14)
+        The external model now receives:
+          SYSTEM: "You are a research assistant conducting deep search..."
+          USER: "Research request: [original query]"
+        This ensures the model generates search results instead of direct answers.
         """
         if not self.valves.jina_api_key:
             return "Error: Jina DeepSearch API key missing. Set it in tool settings."
@@ -70,15 +59,25 @@ class Tools:
         use_stream = (
             stream if (stream is not None) else bool(self.valves.stream_by_default)
         )
-
         url = "https://deepsearch.jina.ai/v1/chat/completions"
         headers: Dict[str, str] = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.valves.jina_api_key}",
         }
 
-        # Build messages: single-user prompt. You can extend to accept full chat history if desired.
-        messages = [{"role": "user", "content": query}]
+        # System prompt explicitly instructs model to act as researcher
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a research assistant conducting deep searches. "
+                    "Your task is to find comprehensive, authoritative information on the topic. "
+                    "Structure results as: Key Findings, Verified Sources (with URLs), and Analysis. "
+                    "NEVER provide direct answers - only present search results and sources."
+                ),
+            },
+            {"role": "user", "content": f"Research request: {query}"},
+        ]
 
         payload = {
             "model": "jina-deepsearch-v1",
@@ -91,22 +90,22 @@ class Tools:
             "team_size": int(self.valves.team_size),
         }
 
-        # Small helper to extract human-readable text from parsed JSON chunks (easiest).
+        # Small helper function to extract human-readable text from parsed JSON chunks
         def _extract_text_from_parsed(obj: Any) -> Optional[str]:
             if obj is None:
                 return None
             if isinstance(obj, str):
                 return obj
             if isinstance(obj, dict):
-                # common shapes: {'choices':[{'delta':{'content':'...'}}]} or {'message':{'content':'...'}}
-                # Try multiple plausible keys:
+                # note to self: common shapes: {'choices':[{'delta':{'content':'...'}}]} or {'message':{'content':'...'}}
+                # Try multiple plausible keys in case of fuckery:
                 for key in ("content", "text", "message", "raw"):
                     if key in obj and isinstance(obj[key], (str,)):
                         return obj[key]
                 if "choices" in obj and isinstance(obj["choices"], list):
                     pieces: List[str] = []
                     for c in obj["choices"]:
-                        # delta.content or message.content
+                        # delta.content or message.content? we account for both
                         if isinstance(c, dict):
                             if (
                                 "delta" in c
@@ -115,10 +114,10 @@ class Tools:
                             ):
                                 pieces.append(str(c["delta"]["content"]))
                             elif "message" in c and isinstance(c["message"], dict):
-                                # message may have content or role+content
+                                # message may have content or role+content, dealt with
                                 m = c["message"]
                                 if "content" in m:
-                                    # content might be dict or str
+                                    # content might be dict or str, so we deal with it here
                                     if isinstance(m["content"], str):
                                         pieces.append(m["content"])
                                     elif (
@@ -130,7 +129,7 @@ class Tools:
                                 pieces.append(str(c["text"]))
                     if pieces:
                         return "".join(pieces)
-                # fallback: if dict contains any string values, concatenate a few
+                # fallback: if dict contains any string values, concatenate a few the ol' fashioned way
                 string_vals = [v for v in obj.values() if isinstance(v, str)]
                 if string_vals:
                     return " ".join(string_vals[:3])
@@ -142,7 +141,7 @@ class Tools:
                     {
                         "type": "status",
                         "data": {
-                            "description": "DeepSearching... May take several minutes.",
+                            "description": "DeepSearching...",
                             "done": False,
                         },
                     }
@@ -152,7 +151,7 @@ class Tools:
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(url, headers=headers, json=payload) as resp:
                     if resp.status != 200:
-                        # try to get body text for error handling
+                        # error handling emittr
                         err_text = await resp.text()
                         if __event_emitter__:
                             await __event_emitter__(
@@ -166,7 +165,7 @@ class Tools:
                             )
                         return f"API Error {resp.status}: {err_text}"
 
-                    # if not using streaming, return full JSON response
+                    # If not using streaming, simply return full JSON response
                     if not use_stream:
                         body = await resp.json()
                         pretty = json.dumps(body, indent=2)
@@ -184,9 +183,9 @@ class Tools:
                         extracted = _extract_text_from_parsed(body)
                         return extracted or pretty
 
-                    # STREAMING PATH: read chunked response and yoink parsed pieces
+                    # STREAMING LOGIC: reads chunked response and emit parsed pieces
                     aggregated_parts: List[str] = []
-                    # Many streaming endpoints deliver newline-delimited JSON or SSE-like lines.
+                    # streaming logic for chunking
                     async for chunk in resp.content.iter_chunked(1024):
                         if not chunk:
                             continue
@@ -195,15 +194,15 @@ class Tools:
                         except Exception:
                             text_chunk = str(chunk)
 
-                        # split into formatted lines in case multiple json entries arrived in this chunk
+                        # split into lines in case multiple json entries arrived in this chunk
                         for raw_line in text_chunk.splitlines():
                             line = raw_line.strip()
                             if not line:
                                 continue
-                            # SSE sometimes prefixes 'data: '
+                            # SSE sometimes prefixes 'data: ' so we account for that
                             if line.startswith("data:"):
                                 line = line[len("data:") :].strip()
-                            # ignore stream end markers
+                            # ignore stream end markers in case a frontend is stupid
                             if line in ("[DONE]", "DONE"):
                                 continue
                             parsed = None
@@ -213,7 +212,7 @@ class Tools:
                                 # partial JSON or raw text; wrap as raw
                                 parsed = {"raw": line}
 
-                            # Try to extract readable text from parsed object
+                            # try to extract readable text from parsed object
                             human = _extract_text_from_parsed(parsed)
                             if human:
                                 aggregated_parts.append(human)
@@ -227,12 +226,13 @@ class Tools:
 
                             # Emit chunk to Open-WebUI if emitter exists
                             if __event_emitter__:
-                                # stream event with the parsed JSON (best-effort)
+                                # stream event with the parsed JSON (best effort, i'm not trying harder.)
+                                # this is fucked, luckily it doesn't matter
                                 await __event_emitter__(
                                     {"type": "stream", "data": parsed}
                                 )
 
-                    # finished streaming
+                    # complete streaming logic, aggregrate and display an emitter
                     final_text = " ".join(p for p in aggregated_parts if p)
                     if __event_emitter__:
                         await __event_emitter__(
@@ -249,7 +249,7 @@ class Tools:
         except asyncio.TimeoutError:
             return "Error: request to DeepSearch timed out."
         except Exception as e:
-            # emitter for error handling
+            # error handling
             if __event_emitter__:
                 try:
                     await __event_emitter__(
@@ -264,3 +264,4 @@ class Tools:
                 except Exception:
                     pass
             return f"Unexpected error during DeepSearch: {str(e)}"
+
