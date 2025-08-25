@@ -30,7 +30,10 @@ class Tools:
         reasoning_effort: str = Field(
             "low", description="Reasoning effort: low|medium|high"
         )
-        budget_tokens: int = Field(500000, description="Token budget for the request. Overrides reasoning effort.")
+        budget_tokens: Optional[int] = Field(
+            default=None,
+            description="Token budget for the request. If set, overrides reasoning effort.",
+        )
         max_returned_urls: int = Field(
             50,
             description="Number of returned URLs that will be considered in the request and answer",
@@ -59,6 +62,7 @@ class Tools:
         use_stream = (
             stream if (stream is not None) else bool(self.valves.stream_by_default)
         )
+
         url = "https://deepsearch.jina.ai/v1/chat/completions"
         headers: Dict[str, str] = {
             "Content-Type": "application/json",
@@ -84,11 +88,15 @@ class Tools:
             "messages": messages,
             "stream": bool(use_stream),
             "reasoning_effort": self.valves.reasoning_effort,
-            "budget_tokens": int(self.valves.budget_tokens),
             "max_returned_urls": str(self.valves.max_returned_urls),
             "no_direct_answer": bool(self.valves.no_direct_answer),
             "team_size": int(self.valves.team_size),
         }
+
+        # Only include budget_tokens if set, fixes valve bug.
+        # Valve can now be properly disabled
+        if self.valves.budget_tokens is not None:
+            payload["budget_tokens"] = int(self.valves.budget_tokens)
 
         # Small helper function to extract human-readable text from parsed JSON chunks
         def _extract_text_from_parsed(obj: Any) -> Optional[str]:
@@ -97,15 +105,12 @@ class Tools:
             if isinstance(obj, str):
                 return obj
             if isinstance(obj, dict):
-                # note to self: common shapes: {'choices':[{'delta':{'content':'...'}}]} or {'message':{'content':'...'}}
-                # Try multiple plausible keys in case of fuckery:
                 for key in ("content", "text", "message", "raw"):
-                    if key in obj and isinstance(obj[key], (str,)):
+                    if key in obj and isinstance(obj[key], str):
                         return obj[key]
                 if "choices" in obj and isinstance(obj["choices"], list):
                     pieces: List[str] = []
                     for c in obj["choices"]:
-                        # delta.content or message.content? we account for both
                         if isinstance(c, dict):
                             if (
                                 "delta" in c
@@ -114,10 +119,8 @@ class Tools:
                             ):
                                 pieces.append(str(c["delta"]["content"]))
                             elif "message" in c and isinstance(c["message"], dict):
-                                # message may have content or role+content, dealt with
                                 m = c["message"]
                                 if "content" in m:
-                                    # content might be dict or str, so we deal with it here
                                     if isinstance(m["content"], str):
                                         pieces.append(m["content"])
                                     elif (
@@ -129,7 +132,6 @@ class Tools:
                                 pieces.append(str(c["text"]))
                     if pieces:
                         return "".join(pieces)
-                # fallback: if dict contains any string values, concatenate a few the ol' fashioned way
                 string_vals = [v for v in obj.values() if isinstance(v, str)]
                 if string_vals:
                     return " ".join(string_vals[:3])
@@ -151,7 +153,6 @@ class Tools:
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(url, headers=headers, json=payload) as resp:
                     if resp.status != 200:
-                        # error handling emittr
                         err_text = await resp.text()
                         if __event_emitter__:
                             await __event_emitter__(
@@ -165,7 +166,6 @@ class Tools:
                             )
                         return f"API Error {resp.status}: {err_text}"
 
-                    # If not using streaming, simply return full JSON response
                     if not use_stream:
                         body = await resp.json()
                         pretty = json.dumps(body, indent=2)
@@ -179,13 +179,10 @@ class Tools:
                                     },
                                 }
                             )
-                        # return some compact text: if choices present try to extract, else full json
                         extracted = _extract_text_from_parsed(body)
                         return extracted or pretty
 
-                    # STREAMING LOGIC: reads chunked response and emit parsed pieces
                     aggregated_parts: List[str] = []
-                    # streaming logic for chunking
                     async for chunk in resp.content.iter_chunked(1024):
                         if not chunk:
                             continue
@@ -193,46 +190,33 @@ class Tools:
                             text_chunk = chunk.decode(errors="ignore")
                         except Exception:
                             text_chunk = str(chunk)
-
-                        # split into lines in case multiple json entries arrived in this chunk
                         for raw_line in text_chunk.splitlines():
                             line = raw_line.strip()
                             if not line:
                                 continue
-                            # SSE sometimes prefixes 'data: ' so we account for that
                             if line.startswith("data:"):
                                 line = line[len("data:") :].strip()
-                            # ignore stream end markers in case a frontend is stupid
                             if line in ("[DONE]", "DONE"):
                                 continue
                             parsed = None
                             try:
                                 parsed = json.loads(line)
                             except Exception:
-                                # partial JSON or raw text; wrap as raw
                                 parsed = {"raw": line}
-
-                            # try to extract readable text from parsed object
                             human = _extract_text_from_parsed(parsed)
                             if human:
                                 aggregated_parts.append(human)
                             else:
-                                # fallback: keep compact json string or the raw line
                                 aggregated_parts.append(
                                     parsed.get("raw")
                                     if isinstance(parsed, dict) and "raw" in parsed
                                     else json.dumps(parsed)
                                 )
-
-                            # Emit chunk to Open-WebUI if emitter exists
                             if __event_emitter__:
-                                # stream event with the parsed JSON (best effort, i'm not trying harder.)
-                                # this is fucked, luckily it doesn't matter
                                 await __event_emitter__(
                                     {"type": "stream", "data": parsed}
                                 )
 
-                    # complete streaming logic, aggregrate and display an emitter
                     final_text = " ".join(p for p in aggregated_parts if p)
                     if __event_emitter__:
                         await __event_emitter__(
@@ -245,11 +229,9 @@ class Tools:
                             }
                         )
                     return final_text or "DeepSearch returned no readable content."
-
         except asyncio.TimeoutError:
             return "Error: request to DeepSearch timed out."
         except Exception as e:
-            # error handling
             if __event_emitter__:
                 try:
                     await __event_emitter__(
