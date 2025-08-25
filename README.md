@@ -11,7 +11,7 @@ Yes. The tool provides 8 different valves you can edit. All of this can easily b
 
 Valves:
 1. **Jina API Key** (technically optional, see next section for more info.) - Allows adjusting the main API key to be used.
-2. **Timeout Request Limit** (in seconds) - Adjusts how long the tool will try to connect to Jina.ai before dropping connection.
+2. **Timeout Request Limit** (in seconds) - Adjusts the maximum timeout limit for Jina, dropping connection if the deepsearch isn't completed within the time limit. **600+ seconds strongly recommended as this time includes the time it takes the model to deepsearch!**
 3. **Reasoning Effort** - low, med, high. (Adjusts total *potential* token use. Low maxes at 500K, med at 1M, high at 2M.) Please note, **more than the tokens listed here may be used**. This is generally a non issue as we're talking +-50-100K tokens, but for those lacking on tokens, it's worth noting.
 4. **Token Budget**: This allows you to set a maximum budget for searching. This overrides reasoning effort.
 5. **Max Returned URLs**: Defines the maximum amount of URLs that are included & considered in the final answer.
