@@ -35,5 +35,7 @@ Now that we've gone over all the important crap, here's how to actually use this
 4. Add your Jina API key, and optionally customize the valves for optimal results.
 
 ## Your rights & LICENSE
-**This project is licensed under the GNU GPLv3. Everything here is entirely free and open source. You may copy, modify, use, and distribute these files to your hearts content without informing me. COMMERCIAL USE PROHIBITED. IF THERE IS ENOUGH DEMAND, I MAY RE-LICENSE IT UNDER MIT OR APACHE 2.0 TO ALLOW FOR COMMERCIAL USE.
-PLEASE REFER TO LICENSE.md FOR MORE INFORMATION ON YOUR RIGHTS.**
+**This project is licensed under the GNU GPLv3. Everything here is entirely free and open source. You may copy, modify, use, and distribute these files to your hearts content without informing me.**
+
+**IF THERE IS ENOUGH DEMAND, I MAY RE-LICENSE IT UNDER MIT OR APACHE 2.0 TO ALLOW FOR MORE PERMISSIVE COMMERCIAL USE.
+PLEASE REFER TO 'LICENSE' FOR MORE INFORMATION ON YOUR RIGHTS.**
