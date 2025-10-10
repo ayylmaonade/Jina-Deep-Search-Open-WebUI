@@ -33,6 +33,7 @@ Now that we've gone over all the important crap, here's how to actually use this
 2. Visit https://openwebui.com/t/ayylmaonade/deepsearch and directly import the tool by clicking "Get".
 3. Convert to .json and import the tool in OWI under Workspace>Tools>Import Tool. (You're insane if you do this.)
 4. Add your Jina API key, and optionally customize the valves for optimal results.
+5 (Optional) Within OWI, in the tools tab, select this tool's valves and toggle 'stream' to **false**. Streaming within OWI currently doesn't work and mostly just wastes tokens, but if you want to see the deepsearch models thinking, keep enabled.
 
 ## Your rights & LICENSE
 **This project is licensed under the GNU GPLv3. Everything here is entirely free and open source. You may copy, modify, use, and distribute these files to your hearts content without informing me.**
