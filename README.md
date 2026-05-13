@@ -1,6 +1,6 @@
-## Deep Search filter for Open-WebUI (v1.4.0 — Jina.ai based)
+## Deep Search function for Open-WebUI (v1.4.0 — Jina.ai based)
 
-This is a fully independent DeepSearch **filter** written in Python, specifically built for integration with Open-WebUI. It uses Jina's DeepSearch model to off-load searching to keep local LLM context contamination free and prevent slow-down. This can use several hundred thousand up to several million tokens per search depending on settings. If you're concerned about context window, don't be. The fetched context to injected context ratio is around 60:1. (e.g., a DeepSearch using 1.2m tokens will inject roughly ~20K tokens into your LLM.) How? Jina's DeepSearch model is the agent visiting all of the pages *for* your model. It then provides all relevant context in a JSON string, dramatically reducing token injection.
+This is a fully independent DeepSearch **function** written in Python, specifically built for integration with Open-WebUI. It uses Jina's DeepSearch model to off-load searching to keep local LLM context contamination free and prevent slow-down. This can use several hundred thousand up to several million tokens per search depending on settings. If you're concerned about context window, don't be. The fetched context to injected context ratio is around 60:1. (e.g., a DeepSearch using 1.2m tokens will inject roughly ~20K tokens into your LLM.) How? Jina's DeepSearch model is the agent visiting all of the pages *for* your model. It then provides all relevant context in a JSON string, dramatically reducing token injection.
 
 This makes DeepSearching viable even on consumer and edge devices.
 
@@ -10,7 +10,7 @@ Simply put, DeepSearch uses standard keyword search with a twist, allowing you t
 
 ### How it works (v1.4.0)
 
-Unlike previous versions that worked as a tool the LLM calls, Deep Search v1.4.0 works as a **filter** that intercepts your message before it reaches the LLM. Here's the flow:
+Deep Search v1.4.0 works as a function that intercepts your message before it reaches the LLM. Here's the flow:
 
 1. You type a question in the chat
 2. Deep Search intercepts it, queries Jina's DeepSearch API with your settings
@@ -24,9 +24,9 @@ Real-time progress summaries are streamed back using a local LLM endpoint (optio
 
 After install, "Deep Search" will show up in the "+" menu where other functions like web search, image generation, code interpreter, etc. appear. You can tweak some valves from here — reasoning effort, team size, and response detail. All other valves are admin-only.
 
-### Valves (14 total)
+### Valves (17 total)
 
-**Admin valves** (set via Open-WebUI Workspace > Tools > Filters):
+**Admin valves** (set via Open-WebUI Admin Settings > Functions > Deep Search > Valves):
 
 1. **Jina API Key** — Your Jina DeepSearch API key (Bearer token). Required.
 2. **LLM API URL** — Your local LLM endpoint for real-time progress summarization. Default: `http://localhost:1234/v1/chat/completions`. Leave blank to disable progress summaries.
@@ -51,20 +51,20 @@ After install, "Deep Search" will show up in the "+" menu where other functions 
 
 ### Does this require payment? What about API keys?
 
-- **API Keys (Jina.AI)**: This filter *does* require a valid Jina API key. Jina offers up to 20M tokens on your first API key for free. Grab one from [Jina.AI](https://jina.ai) and use it here. Even 20M tokens won't last long if you use this frequently, which brings us to...
-- **Payment?**: As FOSS, of course you don't have to pay for this filter itself. But you'll quickly run into Jina rate limits if you use this often. Topping up your API key is recommended. Jina offers 1 billion tokens for $50.
+- **API Keys (Jina.AI)**: This function *does* require a valid Jina API key. Jina offers up to 20M tokens on your first API key for free. Grab one from [Jina.AI](https://jina.ai) and use it here. Even 20M tokens won't last long if you use this frequently, which brings us to...
+- **Payment?**: As FOSS, of course you don't have to pay for this function itself. But you'll quickly run into Jina rate limits if you use this often. Topping up your API key is recommended. Jina offers 1 billion tokens for $50.
 
 ### Privacy
 
-I am not affiliated with Jina, nor Open-WebUI. This filter collects no information on you and merely provides a useful feature. However, as it relies on an external service (Jina), I cannot absolutely guarantee no data is collected on their part. Check their [terms](https://jina.ai/terms) and [privacy policy](https://jina.ai/privacy) if concerned.
+I am not affiliated with Jina, nor Open-WebUI. This function collects no information on you and merely provides a useful feature. However, as it relies on an external service (Jina), I cannot absolutely guarantee no data is collected on their part. Check their [terms](https://jina.ai/terms) and [privacy policy](https://jina.ai/privacy) if concerned.
 
 ### Installation/Setup
 
-1. Grab the raw source code and paste it in OWI via Workspace > Tools > Create.
-2. Visit https://openwebui.com/t/ayylmaonade/deepsearch and import via "Get".
-3. Import the `.json` export from OWI under Workspace > Tools > Import Tool.
-4. Add your Jina API key in the admin valves.
-5. Optional: Toggle 'stream' to **false** in admin valves if you don't need real-time progress. Streaming currently doesn't work perfectly in OWI and wastes tokens, but enables if you want to watch the research unfold.
+1. Grab the DeepSearch.py file/copy its contents.
+2. Navigate to Open-WebUI -> Admin Settings -> Functions -> Add Function.
+3. After the function is added, you must toggle it on either (1. per model or (2. globally.
+4. Add your Jina API key, and optionally customize the admin valves and user valves.
+5. The function should now appear when you click the + button on the chat page.
 
 ## Your rights & LICENSE
 
